@@ -81,10 +81,10 @@ func (r *watcherManager) WatchPackageRevisions(ctx context.Context, filter repos
 					r.watchers[i] = w
 					inserted = true
 					active += 1
-					klog.Infof("watcher %p finished with: %v and is replaced by watcher %p", watcher, err, w)
+					klog.V(3).Infof("watcher %p finished with: %v and is replaced by watcher %p", watcher, err, w)
 				} else {
 					r.watchers[i] = nil
-					klog.Infof("watcher %p finished with: %v and is removed", watcher, err)
+					klog.V(3).Infof("watcher %p finished with: %v and is removed", watcher, err)
 				}
 			} else {
 				active += 1
@@ -102,7 +102,7 @@ func (r *watcherManager) WatchPackageRevisions(ctx context.Context, filter repos
 		r.watchers = append(r.watchers, w)
 	}
 
-	klog.Infof("added watcher %p; there are now %d active watchers and %d slots", w, active, len(r.watchers))
+	klog.V(3).Infof("added watcher %p; there are now %d active watchers and %d slots", w, active, len(r.watchers))
 	return nil
 }
 

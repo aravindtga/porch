@@ -17,6 +17,7 @@ package porch
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sync"
 
 	"github.com/nephio-project/porch/pkg/engine"
@@ -97,10 +98,16 @@ type packageReader interface {
 // listAndWatch implements watch by doing a list, then sending any observed changes.
 // This is not a compliant implementation of watch, but it is a good-enough start for most controllers.
 // One trick is that we start the watch _before_ we perform the list, so we don't miss changes that happen immediately after the list.
+var contextErrorRegex = regexp.MustCompile(`context (deadline exceeded|canceled)`)
+
 func (w *watcher) listAndWatch(ctx context.Context, r packageReader, filter repository.ListPackageRevisionFilter) {
 	if err := w.listAndWatchInner(ctx, r, filter); err != nil {
 		// TODO: We need to populate the object on this error
-		klog.Warningf("sending error to watch stream: %v", err)
+		if contextErrorRegex.MatchString(err.Error()) {
+			klog.V(3).Infof("sending error to watch stream: %v", err)
+		} else {
+			klog.Warningf("sending error to watch stream: %v", err)
+		}
 		ev := watch.Event{
 			Type: watch.Error,
 		}
@@ -195,7 +202,7 @@ func (w *watcher) listAndWatchInner(ctx context.Context, r packageReader, filter
 		w.sendWatchEvent(ev)
 	}
 
-	klog.Infof("watch %p: moving watch into streaming mode after sentAdd %d, sentBacklog %d, sentNewBacklog %d", w, sentAdd, sentBacklog, sentNewBacklog)
+	klog.V(3).Infof("watch %p: moving watch into streaming mode after sentAdd %d, sentBacklog %d, sentNewBacklog %d", w, sentAdd, sentBacklog, sentNewBacklog)
 	w.eventCallback = func(eventType watch.EventType, pr repository.PackageRevision) bool {
 		if w.done {
 			return false
