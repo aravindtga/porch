@@ -1068,7 +1068,7 @@ func (r *gitRepository) fetchRemoteRepository(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "gitRepository::fetchRemoteRepository", trace.WithAttributes())
 	defer span.End()
 	start := time.Now()
-	defer func() { klog.V(4).Infof("Fetching repository %q took %s", r.key.Name, time.Since(start)) }()
+	defer func() { klog.V(2).Infof("Fetching repository %q took %s", r.key.Name, time.Since(start)) }()
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -1227,7 +1227,8 @@ func (r *gitRepository) pushAndCleanup(ctx context.Context, ph *pushRefSpecBuild
 		return err
 	}
 
-	klog.Infof("pushing refs: %v", specs)
+	pushStart := time.Now()
+	klog.Infof("git push: repository=%q remote=%s refs=%v", r.key.Name, OriginName, specs)
 
 	if err := r.doGitWithAuth(ctx, func(auth transport.AuthMethod) error {
 		return r.repo.Push(&git.PushOptions{
@@ -1247,6 +1248,7 @@ func (r *gitRepository) pushAndCleanup(ctx context.Context, ph *pushRefSpecBuild
 		}
 		return err
 	}
+	klog.Infof("git push completed: repository=%q refs=%v duration=%s", r.key.Name, specs, time.Since(pushStart))
 	return nil
 }
 

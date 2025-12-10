@@ -130,17 +130,17 @@ loop:
 
 		case event, eventOk := <-events:
 			if !eventOk {
-				klog.Errorf("Watch event stream closed. Will restart watch from bookmark %q", bookmark)
+				klog.V(4).Infof("Watch event stream closed. Will restart watch from bookmark %q", bookmark)
 				watcher.Stop()
 				events = nil
 				watcher = nil
 
-				// Initiate reconnect
-				reconnect.reset()
+				// Initiate reconnect with backoff
+				reconnect.backoff()
 			} else if repository, ok := event.Object.(*configapi.Repository); ok {
 				if event.Type == watch.Bookmark {
 					bookmark = repository.ResourceVersion
-					klog.Infof("Bookmark: %q", bookmark)
+					klog.V(2).Infof("Bookmark: %q", bookmark)
 				} else {
 					if err := b.updateCache(ctx, event.Type, repository); err != nil {
 						klog.Warningf("error updating cache: %v", err)
@@ -151,7 +151,7 @@ loop:
 			}
 
 		case t := <-ticker.C:
-			klog.Infof("Background task %s", t)
+			klog.V(2).Infof("Background task %s", t)
 			if err := b.runOnce(ctx); err != nil {
 				klog.Errorf("Periodic repository refresh failed: %v", err)
 			}
@@ -227,7 +227,7 @@ func (b *background) handleRepositoryEvent(ctx context.Context, repo *configapi.
 }
 
 func (b *background) runOnce(ctx context.Context) error {
-	klog.Infof("background-refreshing repositories")
+	klog.V(2).Infof("background-refreshing repositories")
 	repositories := &configapi.RepositoryList{}
 	if err := b.coreClient.List(ctx, repositories); err != nil {
 		return fmt.Errorf("error listing repository objects: %w", err)
@@ -352,11 +352,6 @@ func (t *backoffTimer) Stop() bool {
 
 func (t *backoffTimer) channel() <-chan time.Time {
 	return t.timer.C
-}
-
-func (t *backoffTimer) reset() bool {
-	t.curr = t.min
-	return t.timer.Reset(t.curr)
 }
 
 func (t *backoffTimer) backoff() bool {
