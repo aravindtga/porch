@@ -2,6 +2,7 @@ function h1() {
   MESSAGE=" $* "
   TERMINAL_WIDTH=$(tput -T xterm cols)
   STAR_COUNT=$((((TERMINAL_WIDTH - ${#MESSAGE}) / 2) - 2))
+  [[ $STAR_COUNT -lt 0 ]] && STAR_COUNT=0
   STAR_SEGMENT="$(head -c "$STAR_COUNT" < /dev/zero | tr "\0" "-")"
   MESSAGE_LINE="$(tput setaf 4)$STAR_SEGMENT<$(tput sgr0)$MESSAGE$(tput setaf 4)>$STAR_SEGMENT$(tput sgr0)"
   echo

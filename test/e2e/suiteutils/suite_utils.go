@@ -28,6 +28,7 @@ import (
 	kptfilev1 "github.com/kptdev/kpt/pkg/api/kptfile/v1"
 	porchapi "github.com/nephio-project/porch/api/porch/v1alpha1"
 	configapi "github.com/nephio-project/porch/api/porchconfig/v1alpha1"
+	pvapi "github.com/nephio-project/porch/controllers/packagevariants/api/v1alpha1"
 	internalapi "github.com/nephio-project/porch/internal/api/porchinternal/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -455,6 +456,65 @@ func (t *TestSuite) WaitUntilRepositoryReady(name, namespace string) {
 		return true, nil
 	}); err != nil {
 		t.Fatalf("unable to query PackageRevisions after wait: %v", innerErr)
+	}
+}
+
+func (t *TestSuite) WaitUntilMultipleRepositoriesReady(waitingRepos []configapi.Repository) {
+	t.T().Helper()
+
+	repoNames := func() (names []string) {
+		for _, repo := range waitingRepos {
+			names = append(names, repo.Name)
+		}
+		return
+	}()
+
+	var innerErr error
+	err := wait.PollUntilContextTimeout(t.GetContext(), time.Second, 300*time.Second, true, func(ctx context.Context) (bool, error) {
+		var repos configapi.RepositoryList
+		if err := t.Reader.List(t.GetContext(), &repos, client.InNamespace(t.Namespace)); err != nil {
+			innerErr = err
+			return false, err
+		}
+
+		for _, each := range repoNames {
+			if !slices.ContainsFunc(repos.Items, func(aRepo configapi.Repository) bool { return aRepo.Name == each }) {
+				return false, nil
+			}
+		}
+
+		allReady := !slices.ContainsFunc(repos.Items, func(aRepo configapi.Repository) bool {
+			return slices.ContainsFunc(repoNames, func(aName string) bool { return aName == aRepo.Name }) && (aRepo.Status.Conditions == nil || slices.ContainsFunc(aRepo.Status.Conditions, func(aCondition metav1.Condition) bool {
+				return aCondition.Type == configapi.RepositoryReady && aCondition.Status != metav1.ConditionTrue
+			}))
+		})
+		return allReady, nil
+	})
+	if err != nil {
+		t.Fatalf("Repositories not ready after wait: %v", innerErr)
+	}
+}
+
+func (t *TestSuite) WaitUntilAllPackageVariantsReady() {
+	t.T().Helper()
+
+	var innerErr error
+	err := wait.PollUntilContextTimeout(t.GetContext(), time.Second, 300*time.Second, true, func(ctx context.Context) (bool, error) {
+		var repos pvapi.PackageVariantList
+		if err := t.Reader.List(t.GetContext(), &repos, client.InNamespace(t.Namespace)); err != nil {
+			innerErr = err
+			return false, err
+		}
+
+		allReady := !slices.ContainsFunc(repos.Items, func(aRepo pvapi.PackageVariant) bool {
+			return aRepo.Status.Conditions == nil || slices.ContainsFunc(aRepo.Status.Conditions, func(aCondition metav1.Condition) bool {
+				return aCondition.Type == configapi.RepositoryReady && aCondition.Status != metav1.ConditionTrue
+			})
+		})
+		return allReady, nil
+	})
+	if err != nil {
+		t.Fatalf("Repositories not ready after wait: %v", innerErr)
 	}
 }
 
