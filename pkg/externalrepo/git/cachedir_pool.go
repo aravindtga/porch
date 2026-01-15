@@ -68,8 +68,17 @@ func (p *DirectoryPool) GetOrCreateSharedRepository(dir, reponame string) (*Shar
 	} else {
 		repo, err = openRepository(dir)
 		if err != nil {
-			klog.Errorf("Failed to open repository %s: %v", dir, err)
-			return nil, fmt.Errorf("open of cached git directory failed in gogit (check the local git cache): %w", err)
+			klog.Warningf("Failed to open repository %s: %v, cleaning up and will retry", dir, err)
+			// Clean up corrupted directory so it can be re-initialized
+			if removeErr := os.RemoveAll(dir); removeErr != nil {
+				klog.Errorf("Failed to remove corrupted directory %s: %v", dir, removeErr)
+				return nil, fmt.Errorf("open of cached git directory failed in gogit (check the local git cache): %w", err)
+			}
+			// Retry: initialize empty repository after cleanup
+			repo, err = initEmptyRepository(dir)
+			if err != nil {
+				return nil, fmt.Errorf("failed to initialize repository after cleanup: %w", err)
+			}
 		}
 	}
 

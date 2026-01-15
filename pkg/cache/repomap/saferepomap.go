@@ -62,17 +62,25 @@ type repoLoader struct {
 }
 
 func (s *SafeRepoMap) LoadOrCreate(key repository.RepositoryKey, create func() (repository.Repository, error)) (repository.Repository, error) {
-	loader := &repoLoader{}
-	actual, _ := s.syncMap.LoadOrStore(key, loader)
-	l := actual.(*repoLoader)
+	for {
+		loader := &repoLoader{}
+		actual, loaded := s.syncMap.LoadOrStore(key, loader)
+		l := actual.(*repoLoader)
 
-	l.once.Do(func() {
-		l.repo, l.err = create()
-		if l.err != nil {
-			// Remove failed entry so subsequent calls can retry
-			s.syncMap.Delete(key)
+		l.once.Do(func() {
+			l.repo, l.err = create()
+			if l.err != nil {
+				// Remove failed entry so subsequent calls can retry
+				s.syncMap.Delete(key)
+			}
+		})
+
+		// If we got an error and the entry was already loaded (not stored by us),
+		// it means another goroutine failed and deleted the entry. Retry.
+		if l.err != nil && loaded {
+			continue
 		}
-	})
 
-	return l.repo, l.err
+		return l.repo, l.err
+	}
 }
