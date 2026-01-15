@@ -2275,3 +2275,85 @@ func TestFormatCommitMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestPushRetryWithPermissionError(t *testing.T) {
+	const (
+		repoName  = "push-permission-test-repo"
+		namespace = "default"
+	)
+
+	tempdir := t.TempDir()
+	tarfile := filepath.Join("testdata", "trivial-repository.tar")
+	remotepath := filepath.Join(tempdir, "remote")
+	localpath := filepath.Join(tempdir, "local")
+	_, address := ServeGitRepository(t, tarfile, remotepath)
+
+	repoSpec := &configapi.GitRepository{
+		Repo: address,
+	}
+
+	ctx := context.Background()
+
+	opts := testGitRepositoryOptions()
+	opts.RepoOperationRetryAttempts = 3
+
+	localRepo, err := OpenRepository(ctx, repoName, namespace, repoSpec, false, localpath, opts)
+	if err != nil {
+		t.Fatalf("Failed to open Git repository: %v", err)
+	}
+	t.Cleanup(func() {
+		localRepo.Close(ctx)
+	})
+
+	testrepo := localRepo.(*gitRepository)
+
+	// Create a new commit to push
+	var newCommitHash plumbing.Hash
+	err = testrepo.sharedDir.WithLock(func(repo *gogit.Repository) error {
+		mainRef, err := repo.Reference(testrepo.branch.RefInLocal(), true)
+		if err != nil {
+			return err
+		}
+
+		uip := makeUserInfoProvider(repoSpec, &mockK8sUsp{})
+		ch, err := newCommitHelper(repo, uip, mainRef.Hash(), "", plumbing.ZeroHash)
+		if err != nil {
+			return err
+		}
+
+		err = ch.storeFile("test-file.txt", "test content")
+		if err != nil {
+			return err
+		}
+
+		newCommitHash, _, err = ch.commit(ctx, "Test commit", "")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Failed to create new commit: %v", err)
+	}
+
+	// Make remote directory read-only BEFORE push to cause errors
+	err = os.Chmod(remotepath, 0444)
+	if err != nil {
+		t.Fatalf("Failed to change permissions: %v", err)
+	}
+
+	// Restore permissions after delay to allow retry to succeed
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		os.Chmod(remotepath, 0755)
+	}()
+
+	refSpecs := newPushRefSpecBuilder()
+	refSpecs.AddRefToPush(newCommitHash, testrepo.branch.RefInLocal())
+
+	err = testrepo.pushAndCleanup(ctx, refSpecs, nil)
+
+	if err != nil {
+		t.Errorf("Push should have succeeded after retries, got error: %v", err)
+	}
+
+	// Ensure permissions are restored
+	os.Chmod(remotepath, 0755)
+}

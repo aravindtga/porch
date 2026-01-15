@@ -1104,7 +1104,7 @@ func (r *gitRepository) fetchRemoteRepository(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "gitRepository::fetchRemoteRepository", trace.WithAttributes())
 	defer span.End()
 	start := time.Now()
-	defer func() { klog.V(4).Infof("Fetching repository %q took %s", r.key.Name, time.Since(start)) }()
+	defer func() { klog.V(2).Infof("Fetching repository %q took %s", r.key.Name, time.Since(start)) }()
 
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -1406,12 +1406,11 @@ func (r *gitRepository) pushAndCleanup(ctx context.Context, ph *pushRefSpecBuild
 					return err
 				}
 
-				if attempt > 0 {
-					if len(require) > 0 {
-						klog.Infof("Git push retry %d: pushing refs %v, requiring refs %v", attempt+1, specs, require)
-					} else {
-						klog.Infof("Git push retry %d: pushing refs %v", attempt+1, specs)
-					}
+				pushStart := time.Now()
+				if len(require) > 0 {
+					klog.Infof("git push attempt %d: pushing %v to %s/%s, requiring %v", attempt+1, specs, OriginName, r.key.Name, require)
+				} else {
+					klog.Infof("git push attempt %d: pushing %v to %s/%s", attempt+1, specs, OriginName, r.key.Name)
 				}
 
 				pushErr := repo.Push(&git.PushOptions{
@@ -1422,26 +1421,19 @@ func (r *gitRepository) pushAndCleanup(ctx context.Context, ph *pushRefSpecBuild
 					CABundle:   r.caBundle,
 				})
 				if pushErr != nil {
-					klog.Warningf("Push failed on attempt %d: %v", attempt+1, pushErr)
+					klog.Warningf("git push failed attempt %d: %v", attempt+1, pushErr)
+				} else {
+					klog.Infof("git push completed: pushed %v to %s/%s in %s", specs, OriginName, r.key.Name, time.Since(pushStart))
 				}
 				return pushErr
 			})
 		}); err != nil {
-			isRetryable := strings.Contains(err.Error(), "remote ref") ||
-				strings.Contains(err.Error(), "failed to update ref") ||
-				strings.Contains(err.Error(), "pre-receive hook declined") ||
-				strings.Contains(err.Error(), "non-fast-forward update")
-
-			if !isRetryable || attempt >= maxRetries {
-				if isRetryable {
-					return conflictingRequiredRemoteRefError
-				}
+			if err == git.NoErrAlreadyUpToDate {
+				return nil
+			}
+			if attempt >= maxRetries {
 				return err
 			}
-
-			klog.Warningf("Push conflict on attempt %d, retrying: %v", attempt+1, err)
-
-			// Longer delays for branch protection conflicts
 			baseDelay := time.Duration(attempt+1) * baseRetryDelay
 			if strings.Contains(err.Error(), "pre-receive hook declined") {
 				baseDelay = time.Duration(attempt+1) * hookRetryDelay
