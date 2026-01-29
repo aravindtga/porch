@@ -17,7 +17,6 @@ package reg
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/kptdev/kpt/pkg/lib/errors"
 	configapi "github.com/nephio-project/porch/api/porchconfig/v1alpha1"
@@ -120,34 +119,23 @@ func (r *runner) runE(_ *cobra.Command, args []string) error {
 	repository := args[0]
 
 	var git *configapi.GitRepository
-	var oci *configapi.OciRepository
 	var rt configapi.RepositoryType
 
-	if strings.HasPrefix(repository, "oci://") {
-		rt = configapi.RepositoryTypeOCI
-		oci = &configapi.OciRepository{
-			Registry: repository[6:],
-		}
-		if r.name == "" {
-			r.name = porch.LastSegment(repository)
-		}
-	} else {
-		rt = configapi.RepositoryTypeGit
-		// TODO: better parsing.
-		// t, err := parse.GitParseArgs(r.ctx, []string{repository, "."})
-		// if err != nil {
-		// 	return errors.E(op, err)
-		// }
-		git = &configapi.GitRepository{
-			Repo:         repository,
-			Branch:       r.branch,
-			CreateBranch: r.createBranch,
-			Directory:    r.directory,
-		}
+	rt = configapi.RepositoryTypeGit
+	// TODO: better parsing.
+	// t, err := parse.GitParseArgs(r.ctx, []string{repository, "."})
+	// if err != nil {
+	// 	return errors.E(op, err)
+	// }
+	git = &configapi.GitRepository{
+		Repo:         repository,
+		Branch:       r.branch,
+		CreateBranch: r.createBranch,
+		Directory:    r.directory,
+	}
 
-		if r.name == "" {
-			r.name = porch.LastSegment(repository)
-		}
+	if r.name == "" {
+		r.name = porch.LastSegment(repository)
 	}
 
 	secret, err := r.buildAuthSecret()
@@ -161,9 +149,6 @@ func (r *runner) runE(_ *cobra.Command, args []string) error {
 
 		if git != nil {
 			git.SecretRef.Name = secret.Name
-		}
-		if oci != nil {
-			oci.SecretRef.Name = secret.Name
 		}
 	}
 
@@ -192,7 +177,6 @@ func (r *runner) runE(_ *cobra.Command, args []string) error {
 			Type:        rt,
 			Deployment:  r.deployment,
 			Git:         git,
-			Oci:         oci,
 			Sync:        sync,
 		},
 	}); err != nil {
