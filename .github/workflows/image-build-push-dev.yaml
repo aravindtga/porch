@@ -1,9 +1,6 @@
 name: Dev Image Build & Push
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
@@ -42,12 +39,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-      - name: Log in to the Container registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Extract ALPINE_VERSION from Makefile
+        id: alpine
+        run: |
+          echo "version=$(make --eval='print: ; @echo $(ALPINE_VERSION)' print)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
@@ -65,9 +60,11 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: false
           tags: |
             ${{ matrix.image }}:${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache: true
           sbom: true
+          build-args: |
+            ALPINE_VERSION=${{ steps.alpine.outputs.version }}
