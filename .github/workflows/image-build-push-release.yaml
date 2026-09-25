@@ -11,14 +11,14 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  ORG: kptdev
+  ORG: aravindtga
 
 permissions:
   contents: read
 
 jobs:
   check-replace-directives:
-    if: github.repository_owner == 'kptdev'
+    if: github.repository_owner == 'aravindtga'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -41,7 +41,7 @@ jobs:
 
   build-and-push-image:
     needs: check-replace-directives
-    if: github.repository_owner == 'kptdev'
+    if: github.repository_owner == 'aravindtga'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
