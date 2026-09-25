@@ -90,6 +90,7 @@ jobs:
         uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           images: ${{ matrix.image }}
+          flavor: latest=false
           tags: |
             type=ref,event=tag
             # 'stable' tracks the most recent non-prerelease release only.
