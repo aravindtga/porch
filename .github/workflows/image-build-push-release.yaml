@@ -92,6 +92,8 @@ jobs:
           images: ${{ matrix.image }}
           tags: |
             type=ref,event=tag
+            # 'stable' tracks the most recent non-prerelease release only.
+            type=raw,value=stable,enable=${{ !contains(github.ref_name, '-pre') }}
 
       - name: Build and push Docker images
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
