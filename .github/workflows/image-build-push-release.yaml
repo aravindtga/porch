@@ -48,13 +48,13 @@ jobs:
       matrix:
         include:
           - dockerfile: ./build/Dockerfile
-            image: ghcr.io/kptdev/porch-server
+            image: ghcr.io/aravindtga/porch-server
           - dockerfile: ./controllers/Dockerfile
-            image: ghcr.io/kptdev/porch-controllers
+            image: ghcr.io/aravindtga/porch-controllers
           - dockerfile: ./func/Dockerfile
-            image: ghcr.io/kptdev/porch-function-runner
+            image: ghcr.io/aravindtga/porch-function-runner
           - dockerfile: ./func/Dockerfile-wrapperserver
-            image: ghcr.io/kptdev/porch-wrapper-server
+            image: ghcr.io/aravindtga/porch-wrapper-server
     permissions:
       contents: read
       packages: write
